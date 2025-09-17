@@ -295,8 +295,16 @@ app.post('/api/hotel/availability', async (req, res) => {
   }
 });
 
-// Simplified API endpoint that returns parsed availability data
-app.post('/api/hotel/availability/simple', async (req, res) => {
+
+
+
+
+
+
+// ================================
+// Simplified API endpoint
+// ================================
+app.post('/availability', async (req, res) => {
   const startTime = Date.now();
   console.log(`🔍 [${new Date().toISOString()}] POST /api/hotel/availability/simple - Request received`);
   
