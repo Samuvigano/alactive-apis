@@ -1,0 +1,194 @@
+# Hotel Availability API - Curl Examples
+# Updated with maxTariffsPerRoom parameter
+
+# ====================================================================================
+# SIMPLIFIED API ENDPOINTS (RECOMMENDED)
+# ====================================================================================
+
+# 1. Basic search - all available tariffs
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "children": []
+  }'
+
+# 2. Limit to 1 tariff per room (only cheapest per room)
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "maxTariffsPerRoom": 1
+  }'
+
+# 3. Limit to 2 tariffs per room (2 cheapest per room)
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "maxTariffsPerRoom": 2
+  }'
+
+# 4. Limit to 3 tariffs per room (3 cheapest per room)
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "maxTariffsPerRoom": 3
+  }'
+
+# 5. Search with children and coupon, limit 2 tariffs per room
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-12-24",
+    "checkOut": "2025-12-26",
+    "adults": 2,
+    "children": [8, 12],
+    "coupon": "HOLIDAY2025",
+    "maxTariffsPerRoom": 2
+  }'
+
+# 6. Weekend search with 4 adults, limit 5 tariffs per room
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hotelId": "7376",
+    "checkIn": "2025-10-04",
+    "checkOut": "2025-10-06",
+    "adults": 4,
+    "children": [],
+    "maxTariffsPerRoom": 5
+  }'
+
+# 7. Different hotel with custom settings
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hotelId": "7376",
+    "checkIn": "2025-11-15",
+    "checkOut": "2025-11-17",
+    "adults": 3,
+    "children": [5],
+    "languageCode": "EN",
+    "maxTariffsPerRoom": 4
+  }'
+
+# ====================================================================================
+# RAW GRAPHQL RESPONSE ENDPOINT
+# ====================================================================================
+
+# 8. Raw GraphQL response (full unprocessed data)
+curl -X POST http://localhost:3000/api/hotel/availability \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "children": []
+  }'
+
+# ====================================================================================
+# UTILITY ENDPOINTS
+# ====================================================================================
+
+# 9. Health check
+curl http://localhost:3000/health
+
+# 10. API documentation
+curl http://localhost:3000/api/docs
+
+# 11. Root endpoint (server info)
+curl http://localhost:3000/
+
+# ====================================================================================
+# EXPECTED RESPONSE STRUCTURE (simplified endpoint)
+# ====================================================================================
+
+# When using maxTariffsPerRoom, the response includes:
+# {
+#   "success": true,
+#   "hotel": {
+#     "id": "7376",
+#     "searchGuid": "cf8d2261-fdea-4845-92b1-ba216bd4f054"
+#   },
+#   "search": {
+#     "checkIn": "2025-09-19",
+#     "checkOut": "2025-09-20",
+#     "nights": 1,
+#     "adults": 2,
+#     "children": [],
+#     "rateMatchEnabled": true
+#   },
+#   "availability": {
+#     "hasRooms": true,
+#     "totalOptions": 9,              // After filtering
+#     "totalOptionsBeforeFilter": 22, // Before filtering
+#     "optionsMatchAllocation": true
+#   },
+#   "rooms": [
+#     {
+#       "roomId": "75597",
+#       "ratePlanId": "30173",
+#       "price": {
+#         "amount": 210.78,
+#         "currency": "EUR",
+#         "perNight": 210.78
+#       },
+#       "discount": {
+#         "amount": 113.49,
+#         "percentage": 35
+#       },
+#       "availability": {
+#         "quantity": 1,
+#         "isLimited": true
+#       }
+#     }
+#     // ... more rooms (limited by maxTariffsPerRoom per room)
+#   ],
+#   "priceRange": {
+#     "lowest": { "amount": 210.78, "currency": "EUR" },
+#     "highest": { "amount": 372.13, "currency": "EUR" }
+#   }
+# }
+
+# ====================================================================================
+# PARAMETER VALIDATION
+# ====================================================================================
+
+# maxTariffsPerRoom must be between 1 and 50
+# Invalid example (will return 400 error):
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "maxTariffsPerRoom": 0
+  }'
+
+# ====================================================================================
+# FILTERING BEHAVIOR
+# ====================================================================================
+
+# The maxTariffsPerRoom parameter works as follows:
+# 1. All room options are fetched from the GraphQL API
+# 2. Options are sorted by price (lowest first)
+# 3. Options are grouped by roomId
+# 4. Each room group is limited to maxTariffsPerRoom options (keeping cheapest)
+# 5. All filtered options are merged and re-sorted by price
+# 6. Response includes both filtered count and original count
+
+# Example:
+# - Original response: 22 options across 3 rooms (Room A: 8 options, Room B: 7 options, Room C: 7 options)
+# - With maxTariffsPerRoom: 2
+# - Filtered response: 6 options (Room A: 2 cheapest, Room B: 2 cheapest, Room C: 2 cheapest)
+# - Final result is sorted by price across all rooms 

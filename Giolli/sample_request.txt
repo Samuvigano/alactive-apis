@@ -1,0 +1,124 @@
+# Original GraphQL request (for reference)
+curl -X POST 'https://hotelgiolli.simplebooking.it/graphql/ibe2/graphql?opname=StandardAvailabilitySearchProvider&hid=7376' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://hotelgiolli.simplebooking.it' \
+  -H 'X-IBE-Tracing: 308634|$2a$07$whOL4Zdb.6EdqKYo9wfq5O6nrOc1W1/rOVDAELfvOBKCRRBrVs7i2' \
+  --data '{
+    "operationName": "StandardAvailabilitySearchProvider",
+    "variables": {
+      "hotelId": "7376",
+      "languageCode": "IT",
+      "timezoneMinutesOffset": 120,
+      "query": {
+        "allocations": [
+          {
+            "adults": 2,
+            "children": []
+          }
+        ],
+        "coupon": "",
+        "languageCode": "IT",
+        "checkIn": "2025-09-19",
+        "checkOut": "2025-09-20"
+      }
+    },
+    "query": "query StandardAvailabilitySearchProvider($hotelId: ID!, $query: StandardAvailabilitySearchQueryInput!, $languageCode: ID!, $timezoneMinutesOffset: Int!) { hotel(id: $hotelId) { id result: standardAvailabilitySearch(query: $query) { guid rateMatchEnabled noAvailabilityRoomsHTML(languageCode: $languageCode) coupon { affiliatedEntity { ...StandardAvailabilitySearchProviderAffiliatedEntity __typename } recognized unrecognizedMessage(languageCode: $languageCode timezoneMinutesOffset: $timezoneMinutesOffset) __typename } options { signature affiliatedEntity { ...StandardAvailabilitySearchProviderAffiliatedEntity __typename } allocation { adults children __typename } isSecret isLoayltyClubOffer isExclusive availableQuantity forNightsLabel(languageCode: $languageCode) roomTypeAvailableQuantity roomTypeAvailableQuantityLabel(languageCode: $languageCode) extraGuestsLabel(languageCode: $languageCode) price { ...StandardAvailabilitySearchProviderPrice __typename } basePrice { ...StandardAvailabilitySearchProviderPrice __typename } dailyPrice { ...StandardAvailabilitySearchProviderDailyPrice __typename } cancellationPolicy { id __typename } mealPlan { id __typename } offer { id __typename } ratePlan { id __typename } room { id __typename } __typename } optionsMatchRequestedAllocation __typename } __typename } } fragment StandardAvailabilitySearchProviderAffiliatedEntity on AffiliatedEntity { __typename ... on AffiliatedAgency { id name __typename } ... on AffiliatedCompany { id name __typename } } fragment StandardAvailabilitySearchProviderPrice on Price { amount amountIncludesTaxes currencyCode taxesPercent __typename } fragment StandardAvailabilitySearchProviderDailyPrice on RoomOptionDailyPrice { averagePricePerNight { ...StandardAvailabilitySearchProviderPrice __typename } rates { date price { ...StandardAvailabilitySearchProviderPrice __typename } basePrice { ...StandardAvailabilitySearchProviderPrice __typename } __typename } __typename }" 
+  }'
+
+# ====================================================================================
+# NEW API ENDPOINTS EXAMPLES
+# ====================================================================================
+
+# 1. Basic simplified search (recommended)
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "children": []
+  }'
+
+# 2. Search with maximum 2 tariffs per room (keeps cheapest)
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "maxTariffsPerRoom": 2
+  }'
+
+# 3. Search with maximum 1 tariff per room (only cheapest per room)
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "maxTariffsPerRoom": 1
+  }'
+
+# 4. Search with children and coupon, limit 3 tariffs per room
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-12-24",
+    "checkOut": "2025-12-26",
+    "adults": 2,
+    "children": [8, 12],
+    "coupon": "HOLIDAY2025",
+    "maxTariffsPerRoom": 3
+  }'
+
+# 5. Weekend search with different hotel, limit 5 tariffs per room
+curl -X POST http://localhost:3000/api/hotel/availability/simple \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hotelId": "7376",
+    "checkIn": "2025-10-04",
+    "checkOut": "2025-10-06",
+    "adults": 4,
+    "children": [],
+    "maxTariffsPerRoom": 5
+  }'
+
+# 6. Raw GraphQL response (full data)
+curl -X POST http://localhost:3000/api/hotel/availability \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkIn": "2025-09-19",
+    "checkOut": "2025-09-20",
+    "adults": 2,
+    "children": []
+  }'
+
+# 7. Health check
+curl http://localhost:3000/health
+
+# 8. API documentation
+curl http://localhost:3000/api/docs
+
+# ====================================================================================
+# EXPECTED RESPONSE STRUCTURE (simplified endpoint)
+# ====================================================================================
+
+# With maxTariffsPerRoom, the response includes:
+# - totalOptions: number of options after filtering
+# - totalOptionsBeforeFilter: original number of options
+# - rooms: array of room options (limited per room, sorted by price)
+
+# Example response structure:
+# {
+#   "success": true,
+#   "hotel": { "id": "7376", "searchGuid": "..." },
+#   "search": { "checkIn": "2025-09-19", "checkOut": "2025-09-20", "nights": 1, ... },
+#   "availability": {
+#     "hasRooms": true,
+#     "totalOptions": 9,              // After filtering
+#     "totalOptionsBeforeFilter": 22, // Before filtering
+#     "optionsMatchAllocation": true
+#   },
+#   "rooms": [...],  // Limited tariffs per room, sorted by price
+#   "priceRange": { "lowest": {...}, "highest": {...} }
+# } 
