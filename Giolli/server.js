@@ -149,6 +149,57 @@ function isValidDate(dateString) {
   return date instanceof Date && !isNaN(date) && dateString === formatDate(date);
 }
 
+// Helper function to get tariff UUID for a room option
+async function getTariffUuid(option, searchParams, searchGuid) {
+  try {
+    const { hotelId, checkIn, checkOut, adults, children, languageCode } = searchParams;
+    
+    const staticSolutionPayload = {
+      operationName: 'StandardStaticSolutionCreationProvider',
+      variables: {
+        data: {
+          hotelId: hotelId.toString(),
+          items: [{
+            allocation: { adults, children },
+            quantity: 1,
+            signature: option.signature
+          }],
+          availabilitySearchQuery: {
+            allocations: [{ adults, children }],
+            coupon: null,
+            languageCode,
+            checkIn,
+            checkOut
+          },
+          calculatedRateMatchGuid: searchGuid,
+          overridedFromRateMatch: false,
+          voucherGuid: null,
+          portalId: null
+        },
+        languageCode
+      },
+      query: 'mutation StandardStaticSolutionCreationProvider($data: StandardStaticSolutionCreationDataInput!) { result: createStandardStaticSolution(data: $data) { __typename ... on StandardStaticSolution { id } } }'
+    };
+
+    const response = await axios.post(
+      `${DEFAULT_CONFIG.baseUrl}?opname=StandardStaticSolutionCreationProvider&hid=${hotelId}`,
+      staticSolutionPayload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://hotelgiolli.simplebooking.it',
+          'X-IBE-Tracing': DEFAULT_CONFIG.tracingHeader
+        }
+      }
+    );
+
+    return response.data?.data?.result?.id || null;
+  } catch (error) {
+    console.error(`⚠️  Failed to get tariff UUID for signature ${option.signature}:`, error.message);
+    return null;
+  }
+}
+
 // Main API endpoint for hotel availability search
 app.post('/api/hotel/availability', async (req, res) => {
   const startTime = Date.now();
@@ -425,12 +476,20 @@ app.post('/availability', async (req, res) => {
     const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
     console.log(`📊 Found ${searchResult.options?.length || 0} room options for ${nights} night${nights > 1 ? 's' : ''}`);
 
-    // Parse room options
-    const roomOptions = (searchResult.options || []).map(option => {
+    // Parse room options and get tariff UUIDs
+    console.log(`🔧 Getting tariff UUIDs for ${searchResult.options?.length || 0} room options...`);
+    const searchParams = { hotelId, checkIn, checkOut, adults, children, languageCode };
+    
+    const roomOptionsPromises = (searchResult.options || []).map(async (option) => {
       // Extract room information from signature
       const [roomId, ratePlanId, mealPlanType, , , priceStr] = option.signature.split(',');
       
+      // Get tariff UUID for this option
+      const tariffUuid = await getTariffUuid(option, searchParams, searchResult.guid);
+      
       return {
+        tariff_uuid: tariffUuid,
+        signature: option.signature,
         roomId: option.room?.id || roomId,
         ratePlanId: option.ratePlan?.id || ratePlanId,
         mealPlanId: option.mealPlan?.id,
@@ -488,6 +547,9 @@ app.post('/availability', async (req, res) => {
         }
       };
     });
+    
+    const roomOptions = await Promise.all(roomOptionsPromises);
+    console.log(`✅ Successfully retrieved tariff UUIDs for ${roomOptions.filter(r => r.tariff_uuid).length}/${roomOptions.length} room options`);
 
     // Sort by price (lowest first)
     roomOptions.sort((a, b) => a.price.amount - b.price.amount);
@@ -636,8 +698,8 @@ app.get('/api/docs', (req, res) => {
           coupon: ''
         }
       },
-      'POST /api/hotel/availability/simple': {
-        description: 'Search for hotel room availability (simplified, parsed response)',
+      'POST /availability': {
+        description: 'Search for hotel room availability (simplified, parsed response with tariff UUIDs)',
         parameters: {
           hotelId: { type: 'string', default: '7376', description: 'Hotel ID' },
           checkIn: { type: 'string', required: true, format: 'YYYY-MM-DD', description: 'Check-in date' },
@@ -659,14 +721,18 @@ app.get('/api/docs', (req, res) => {
           maxTariffsPerRoom: 3
         },
         response: {
-          description: 'Returns a clean, simplified structure with essential room and pricing information',
+          description: 'Returns a clean, simplified structure with essential room and pricing information, including tariff UUIDs for booking',
           structure: {
             success: 'boolean',
             hotel: { id: 'string', searchGuid: 'string' },
             search: { checkIn: 'date', checkOut: 'date', nights: 'number', adults: 'number', children: 'array' },
             availability: { hasRooms: 'boolean', totalOptions: 'number' },
             rooms: [{ 
+              tariff_uuid: 'string',
               roomId: 'string', 
+              ratePlanId: 'string',
+              mealPlanId: 'string',
+              offerId: 'string',
               price: { amount: 'number', currency: 'string', perNight: 'number' },
               discount: { amount: 'number', percentage: 'number' },
               availability: { quantity: 'number', isLimited: 'boolean' }
